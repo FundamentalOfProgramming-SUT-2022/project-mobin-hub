@@ -14,17 +14,18 @@ int depth;
 
 char *clipboard;
 
-char *str, *str1, *str2;
+char *str, *str1, *str2, *wtp, *tmpstr;
 char **paths, **history, **prv_sit;
 char *path;
 int lft, rit, at, backward, forward, siz, is_wild;
 int *arr;
 int arr_sz, file_cnt, hist_cnt;
 
-bool count, all, byword, pr, end_of_file, Cflag, Lflag;
+bool count, all, byword, pr, end_of_file, Cflag, Lflag, arman;
 char *file_to_string(FILE *);
 char *concat(char*, char*);
-
+int find_in_str(char*, char*);
+void perform(char *);
 
 char *ntab(int n){
     printf("%d\n", n);
@@ -216,7 +217,6 @@ void get_flag(char *flag){
 
 void get_flags(char *flags){
     printf("initializing flags...\n");
-    printf("(*%s*)", flags);
     while(strlen(flags)>0){
         char *flag = get_til(flags+1, '-');
         flags += strlen(flag)+1;
@@ -486,7 +486,7 @@ void copystr(char *path, int row, int col, int sz){
 }
 
 void cutstr(char *path, int row, int col, int sz){
-    print_flags();
+    // print_flags();
     if(path[0] == '/')path++;
     copystr(path, row, col, sz);
     print_file(path);
@@ -583,26 +583,31 @@ int find(){
         at = 1;
     }
     if(count){
-        if(pr)printf("%d\n", count_in_string(0, string));
+        sprintf(tmpstr, "%d\n", count_in_string(0, string));
+        if(pr)wtp = concat(wtp, tmpstr);
         return 0;
     }
     if(at){
+        // printf("HERE\n");
         int rmn = at;
         int total = count_in_string(0, string);
         if(total<rmn){
-            if(pr)printf("-1\n");
+            sprintf(tmpstr, "-1\n");
+            if(pr)wtp = concat(wtp, tmpstr);
             return -1;
         }
         for(int i=0;i+1<strlen(string);i++){
             int tmp = count_in_string(i, string)-count_in_string(i+1, string);
             if(tmp >= rmn){
-                if(pr)printf("%d\n", if_byword(string, i));
+                sprintf(tmpstr, "%d\n", if_byword(string, i));
+                if(pr)wtp = concat(wtp, tmpstr);
                 return i;
             }else{
                 rmn -= tmp;
             }
         }
-        if(pr)printf("%d\n", if_byword(string, strlen(string)-1));
+        sprintf(tmpstr, "%d\n", if_byword(string, strlen(string)-1));
+        if(pr)wtp = concat(wtp, tmpstr);
         return strlen(string)-1;
     }
     if(all){
@@ -611,11 +616,13 @@ int find(){
         for(int i=strlen(string)-1;i>=0;i--){
             if(count_in_string(i, string) > last){
                 last = count_in_string(i, string);
-                if(pr)printf("%d,", if_byword(string, i));
+                sprintf(tmpstr, "%d,", if_byword(string, i));
+                if(pr)wtp = concat(wtp, tmpstr);
                 arr[arr_sz++] = i;
             }
         }
-        if(pr)printf("\n");
+        if(pr)trim(wtp);
+        if(pr)wtp = concat(wtp, "\n");
         return 0;
     }
 }
@@ -675,6 +682,7 @@ void grep(){
     // }
     if(Cflag && Lflag){
         printf("invalid command\n");
+        return;
     }
     int res = 0;
     for(int i=0;i<file_cnt;i++){
@@ -694,25 +702,30 @@ void grep(){
                     has = true;
                     continue;
                 }
-                printf("%s: %s\n", paths[i], line);
+                sprintf(tmpstr, "%s: %s\n", paths[i], line);
+                wtp = concat(wtp, tmpstr);
             }
         }
         if(has){
-            printf("%s\n", paths[i]);
+            sprintf(tmpstr, "%s\n", paths[i]);
+            wtp = concat(wtp, tmpstr);
         }
         fclose(file);
     }
     if(Cflag){
-        printf("%d\n", res);
+        sprintf(tmpstr, "%d\n", res);
+        wtp = concat(wtp, tmpstr);
     }
 }
 
 void auto_indent(){
+    get_backup(path);
+    FILE *file;
     pr = false;
     str = "{";
     at = 1;
     while(find() != -1){
-        FILE *file = fopen(path, "r");
+        file = fopen(path, "r");
         char *string = file_to_string(file);
         fclose(file);
         int ind = find();
@@ -724,7 +737,18 @@ void auto_indent(){
     str = "}";
     at = 1;
     while(find() != -1){
-        FILE *file = fopen(path, "r");
+        file = fopen(path, "r");
+        char *string = file_to_string(file);
+        fclose(file);
+        int ind = find();
+        if(string[ind+1] != '\n'){
+            insert(path, "\n", ind+1);
+        }
+        at++;
+    }
+    at = 1;
+    while(find() != -1){
+        file = fopen(path, "r");
         char *string = file_to_string(file);
         fclose(file);
         int ind = find();
@@ -738,7 +762,7 @@ void auto_indent(){
         at++;
     }
     int tab_cnt = 0;
-    FILE *file = fopen(path, "r");
+    file = fopen(path, "r");
     char *newfile = "";
     while(true){
         char *line = getln_file(file);
@@ -772,124 +796,212 @@ void auto_indent(){
     fclose(file);
 }
 
+int no_of_lines(char *path){
+    int res = 0;
+    FILE *file = fopen(path, "r");
+    end_of_file = false;
+    while (true){
+        char *line = getln_file(file);
+        if(end_of_file)break;
+        res++;
+    }
+    return res;
+}
+
+void compare_file(char *path1, char *path2){
+    int line_cnt1 = no_of_lines(path1);
+    int line_cnt2 = no_of_lines(path2);
+    FILE *file1 = fopen(path1, "r");
+    FILE *file2 = fopen(path2, "r");
+    for(int i=0;i<line_cnt1 && i<line_cnt2;i++){
+        char *line1 = getln_file(file1);
+        char * line2 = getln_file(file2);
+        if(strcmp(line1, line2) != 0){
+            sprintf(tmpstr, "============ #%d ============\n%s\n%s\n", i+1, line1, line2);
+            wtp = concat(wtp, tmpstr);
+        }
+    }
+    if(line_cnt1 > line_cnt2){
+        sprintf(tmpstr, "============ #%d - #%d ============\n", line_cnt2+1, line_cnt1);
+        wtp = concat(wtp, tmpstr);
+        for(int i=line_cnt2;i<line_cnt1;i++){
+            char *line = getln_file(file1);
+            sprintf(tmpstr, "%s\n", line);
+            wtp = concat(wtp, tmpstr);
+        }
+    }
+    if(line_cnt2 > line_cnt1){
+        sprintf(tmpstr, "============ #%d - #%d ============\n", line_cnt1+1, line_cnt2);
+        wtp = concat(wtp, tmpstr);
+        for(int i=line_cnt1;i<line_cnt2;i++){
+            char *line = getln_file(file2);
+            printf("%s\n", line);
+        }
+    }
+}
+
+void perform(char *line){
+    int ind = find_in_str(line, "=D");
+    if(ind != -1){
+        arman = true;
+        char *other_command = malloc(N*N*sizeof(char));
+        strcpy(other_command, line);
+        line[ind-1] = '\0';
+        other_command += ind+3;
+        printf("(%s), (%s)\n", line, other_command);
+        perform(line);
+        arman = false;
+        str = wtp;
+        perform(other_command);
+        return;
+    }
+    char *command = get_til(line, ' ');
+    line += strlen(command)+1;
+    if(strcmp(command, "tree") == 0){
+        int dpth = atoi(get_word(line));
+        char *syscom = malloc(N*N*sizeof(char));
+        sprintf(syscom, "tree -L %d", dpth);
+        printf("%s\n", syscom);
+        FILE *fp = popen(syscom, "r");
+        wtp = file_to_string(fp);
+    }
+    get_flags(line);
+    // print_flags();
+    if(strcmp(command, "createfile") == 0){
+        create_file(path);
+        return;
+    }
+    if(strcmp(command, "insertstr") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        // print_flags();
+        insertstr(path, str, lft, rit);
+        return;
+    }
+    if(strcmp(command, "removestr") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        removestr(path, lft, rit, siz);
+        return;
+    }
+    if(strcmp(command, "cat") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        print_file(path);
+        return;
+    }
+    if(strcmp(command, "copystr") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        copystr(path, lft, rit, siz);
+        return;
+    }
+    if(strcmp(command, "cutstr") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;;
+        }
+        cutstr(path, lft, rit, siz);
+        return;
+    }
+    if(strcmp(command, "pastestr") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        insertstr(path, clipboard, lft, rit);
+        return;
+    }
+    if(strcmp(command, "find") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        find();
+        return;
+    }
+    if(strcmp(command, "replace") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        replace();
+        return;
+    }
+    if(strcmp(command, "grep") == 0){
+        for(int i=0;i<file_cnt;i++){
+            if(!exists(paths[i])){
+                printf("invalid command\n");
+                return;
+            }
+        }
+        grep();
+        return;
+    }
+    if(strcmp(command, "undo") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        undo();
+        return;
+    }
+    if(strcmp(command, "auto-indent") == 0){
+        if(!exists(path)){
+            printf("invalid command\n");
+            return;
+        }
+        auto_indent();
+        return;
+    }
+    if(strcmp(command, "compare") == 0){
+        char *path1, *path2;
+        if(line[0] == '\"'){
+            path1 = get_til(line+1, '\"');
+            line += strlen(path1)+3;
+        }else{
+            path1 = get_til(line, ' ');
+            line += strlen(path1)+1;
+        }
+        if(line[0] == '\"'){
+            path2 = get_til(line+1, '\"');
+            line += strlen(path2)+3;
+        }else{
+            path2 = get_til(line, ' ');
+            line += strlen(path2)+1;
+        }
+        compare_file(path1, path2);
+        return;
+    }
+    if(!arman){
+        printf("%s\n", wtp);
+    }
+}
+
 int main(){
     paths = malloc(N*N*sizeof(char*));
     prv_sit = malloc(N*N*sizeof(char*));
     history = malloc(N*N*sizeof(char*));
+    tmpstr = malloc(N*N*sizeof(char));
     arr = malloc(N*N*sizeof(int));
     clipboard = (char *)malloc(N*N*sizeof(char));
     path = "root/dir1/file.txt"; // for debugging purpose
     while(true){
+        wtp = "";
         at = lft = rit = 0;
-        all = byword = backward = count = Cflag = Lflag =false;
+        all = byword = backward = count = Cflag = Lflag = arman =false;
         pr = true;
         str = "";
         char *line = getln();
-        // printf("((%s))", line);
-        char *command = get_til(line, ' ');
-        // printf("(%s)\n", command);
-        line += strlen(command)+1;
-        get_flags(line);
-        // print_flags();
-        if(strcmp(command, "createfile") == 0){
-            create_file(path);
-            continue;
-        }
-        if(strcmp(command, "insertstr") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            print_flags();
-            insertstr(path, str, lft, rit);
-            continue;
-        }
-        if(strcmp(command, "removestr") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            removestr(path, lft, rit, siz);
-            continue;
-        }
-        if(strcmp(command, "cat") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            print_file(path);
-            continue;
-        }
-        if(strcmp(command, "copystr") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            copystr(path, lft, rit, siz);
-            continue;
-        }
-        if(strcmp(command, "cutstr") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;;
-            }
-            cutstr(path, lft, rit, siz);
-            continue;
-        }
-        if(strcmp(command, "pastestr") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            insertstr(path, clipboard, lft, rit);
-            continue;
-        }
-        if(strcmp(command, "find") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            find();
-            continue;
-        }
-        if(strcmp(command, "replace") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            replace();
-            continue;
-        }
-        if(strcmp(command, "grep") == 0){
-            for(int i=0;i<file_cnt;i++){
-                if(!exists(paths[i])){
-                    printf("invalid command\n");
-                    continue;
-                }
-            }
-            grep();
-            continue;
-        }
-        if(strcmp(command, "undo") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            undo();
-            continue;
-        }
-        if(strcmp(command, "auto-indent") == 0){
-            if(!exists(path)){
-                printf("invalid command\n");
-                continue;
-            }
-            auto_indent();
-            continue;
-        }
-        if(strcmp(command, "compare") == 0){
-            
-        }
-        break;
+        perform(line);
     }
     return 0;
 }
