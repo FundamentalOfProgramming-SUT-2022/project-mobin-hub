@@ -16,16 +16,45 @@ char *clipboard;
 
 char *str, *str1, *str2, *wtp, *tmpstr;
 char **paths, **history, **prv_sit;
+char **ed_line;
 char *path;
 int lft, rit, at, backward, forward, siz, is_wild;
 int *arr;
 int arr_sz, file_cnt, hist_cnt;
+int ed_x, ed_y;
 
 bool count, all, byword, pr, end_of_file, Cflag, Lflag, arman;
 char *file_to_string(FILE *);
 char *concat(char*, char*);
 int find_in_str(char*, char*);
 void perform(char *);
+
+char *handle_backslsh(char *string){
+    char *res = malloc(N*N*sizeof(char));
+    memset(res, '\0', sizeof(res));
+    bool slsh = false;
+    for(int i=0;i<strlen(string);i++){
+        // printf("%c", string[i]);
+        if(string[i] == '\\'){
+            if(slsh){
+                res[strlen(res)] = '\\';
+            }
+            slsh = !slsh;
+            continue;
+        }
+        if(slsh){
+            if(string[i] == 'n' && slsh){
+                res[strlen(res)] = '\n';
+                slsh = false;
+            }
+        }else{
+            res[strlen(res)] = string[i];
+        }
+
+    }
+    printf("%s\n", res);
+    return res;
+}
 
 char *ntab(int n){
     printf("%d\n", n);
@@ -216,17 +245,14 @@ void get_flag(char *flag){
 }
 
 void get_flags(char *flags){
-    printf("initializing flags...\n");
     while(strlen(flags)>0){
         char *flag = get_til(flags+1, '-');
         flags += strlen(flag)+1;
         if(flag[strlen(flag)-1] == ' '){
             trim(flag);
         }
-        printf("(*%s*)", flag);
         get_flag(flag);
     }
-    printf("flags are collected\n");
 }
 
 void print_flags(){
@@ -354,7 +380,8 @@ void insert(char *path, char *str, int l){
     fclose(nfile);
 }
 
-void insertstr(char *path, char *str, int row, int col){
+void insertstr(char *path, char *string, int row, int col){
+    char *str = handle_backslsh(string);
     col++;
     get_backup(path);
     if(path[0] == '/')path++;
@@ -396,6 +423,7 @@ void insertstr(char *path, char *str, int row, int col){
     FILE *nfile = fopen(path, "w");
     fputs(newfile, nfile);
     fclose(nfile);
+    printf("(%s)", handle_backslsh(string));
     return;
 }
 
@@ -993,7 +1021,7 @@ int main(){
     tmpstr = malloc(N*N*sizeof(char));
     arr = malloc(N*N*sizeof(int));
     clipboard = (char *)malloc(N*N*sizeof(char));
-    path = "root/dir1/file.txt"; // for debugging purpose
+    //path = "root/dir1/file.txt"; // for debugging purpose
     while(true){
         wtp = "";
         at = lft = rit = 0;
