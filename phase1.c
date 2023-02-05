@@ -423,7 +423,6 @@ void insertstr(char *path, char *string, int row, int col){
     FILE *nfile = fopen(path, "w");
     fputs(newfile, nfile);
     fclose(nfile);
-    printf("(%s)", handle_backslsh(string));
     return;
 }
 
@@ -876,7 +875,6 @@ void perform(char *line){
         strcpy(other_command, line);
         line[ind-1] = '\0';
         other_command += ind+3;
-        printf("(%s), (%s)\n", line, other_command);
         perform(line);
         arman = false;
         str = wtp;
@@ -889,7 +887,6 @@ void perform(char *line){
         int dpth = atoi(get_word(line));
         char *syscom = malloc(N*N*sizeof(char));
         sprintf(syscom, "tree -L %d", dpth);
-        printf("%s\n", syscom);
         FILE *fp = popen(syscom, "r");
         wtp = file_to_string(fp);
     }
